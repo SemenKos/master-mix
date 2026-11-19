@@ -142,7 +142,7 @@ tr.top td{background:rgba(255,209,102,.3)}
 <body>
 <header>
   <h1><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="29" fill="#fff" stroke="#0b4f6c" stroke-width="3"/><path d="M32 3c-6 10-6 22 0 29s18 9 28 4M32 32c-8 3-15 12-16 25M32 32C22 28 12 20 9 12" fill="none" stroke="#0b4f6c" stroke-width="3" stroke-linecap="round"/><path d="M32 3c10 4 17 13 19 24M60 36c-3 11-12 20-24 25M16 57C7 51 2 40 4 28" fill="none" stroke="#ffb703" stroke-width="5" stroke-linecap="round" opacity=".85"/></svg><span id="title">Мастер микст</span></h1>
-  <button class="btn sm" id="kb" onclick="toggleRu()" title="Печатать русскими буквами, даже если в системе стоит английская раскладка (переключение: F2)">Ввод: EN</button>
+  <button class="btn sm" id="kb" onclick="toggleRu()" title="Печатать русскими буквами, даже если в системе стоит английская раскладка (переключение: F2)">Ввод: RU</button>
   <button class="btn sm" onclick="newTournament()">Новый турнир</button>
 </header>
 <main id="app"></main>
@@ -157,7 +157,7 @@ const POS = { 2: '2-й номер (справа)', 4: '4-й номер (слев
 function newState() {
   return {
     stage: 'setup', name: 'Мастер микст', players: [], pairs: [], matches: [], tab: 'now',
-    settings: { bestOf: 1, pointsTo: 21, lastTo: 15, courts: 2 },
+    settings: { bestOf: 1, pointsTo: 21, lastTo: 15, courts: 1 },
   };
 }
 function load() { try { const s = localStorage.getItem(LS); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
@@ -358,11 +358,12 @@ const RU_KEYS = {
   KeyA: 'ф', KeyS: 'ы', KeyD: 'в', KeyF: 'а', KeyG: 'п', KeyH: 'р', KeyJ: 'о', KeyK: 'л', KeyL: 'д', Semicolon: 'ж', Quote: 'э',
   KeyZ: 'я', KeyX: 'ч', KeyC: 'с', KeyV: 'м', KeyB: 'и', KeyN: 'т', KeyM: 'ь', Comma: 'б', Period: 'ю', Backquote: 'ё',
 };
-let ruMode = false;
-try { ruMode = localStorage.getItem('beachvb.ru') === '1'; } catch (e) {}
+// по умолчанию — русский; выбор пользователя запоминается
+let ruMode = true;
+try { ruMode = localStorage.getItem('beachvb.ru2') !== '0'; } catch (e) {}
 function toggleRu() {
   ruMode = !ruMode;
-  try { localStorage.setItem('beachvb.ru', ruMode ? '1' : '0'); } catch (e) {}
+  try { localStorage.setItem('beachvb.ru2', ruMode ? '1' : '0'); } catch (e) {}
   updateKb();
   toast([ruMode ? 'Ввод русскими буквами включён (F2 — переключить)' : 'Ввод как в системе (EN)']);
 }
@@ -379,6 +380,8 @@ function ruKeydown(e) {
   if (!ruMode || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
   const el = e.target;
   if (!(el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'search' || !el.getAttribute('type'))))) return;
+  // если система уже печатает не латиницей (русская раскладка, телефон) — не вмешиваемся
+  if (typeof e.key !== 'string' || e.key.length !== 1 || e.key.charCodeAt(0) > 127) return;
   const ch = ruChar(e); if (!ch) return;
   e.preventDefault();
   if (!(document.execCommand && document.execCommand('insertText', false, ch))) {
