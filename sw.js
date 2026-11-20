@@ -1,7 +1,7 @@
 // Service worker «Мастер микст»: приложение работает без интернета,
 // а при наличии сети всегда берёт свежую версию страницы.
-const CACHE = 'master-mix-v1';
-const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon-32.png'];
+const CACHE = 'master-mix-redesign-v2';
+const CORE = ['./', './index.html', './manifest.json', './styles.css', './app.js', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon-32.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
