@@ -2,12 +2,19 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Мастер микст</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E🏐%3C/text%3E%3C/svg%3E">
-<meta name="theme-color" content="#1593b0">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Микст">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="application-name" content="Микст">
+<meta name="theme-color" content="#0b4f6c">
 <style>
 :root{
   --bg:#f5e9d3; --card:#fffaf0; --ink:#173042; --muted:#6c7a80; --line:#e6d6b5;
@@ -26,7 +33,7 @@ body{margin:0;color:var(--ink);font:15px/1.45 Rubik,system-ui,-apple-system,"Seg
   background-color:var(--bg);
   background-image:radial-gradient(rgba(170,125,50,.13) 1px,transparent 1.3px),radial-gradient(rgba(255,255,255,.35) 1px,transparent 1.3px);
   background-size:14px 14px,22px 22px;background-position:0 0,7px 11px;min-height:100vh}
-header{position:relative;color:#fff;padding:18px 16px 34px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+header{position:relative;color:#fff;padding:calc(18px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 34px calc(16px + env(safe-area-inset-left));display:flex;gap:8px;align-items:center;flex-wrap:wrap;
   background:radial-gradient(circle at 88% -10%,rgba(255,214,120,.95) 0 46px,rgba(255,190,90,.35) 47px 80px,transparent 81px),
              linear-gradient(180deg,#38b6d8 0%,#1593b0 45%,var(--ocean) 100%)}
 header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:22px;
@@ -40,7 +47,7 @@ header h1 svg{width:34px;height:34px;flex:none;filter:drop-shadow(0 2px 3px rgba
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){header h1 svg{animation:none}}
 header .btn{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.45);color:#fff;backdrop-filter:blur(2px)}
-main{max-width:1100px;margin:0 auto;padding:12px 16px 24px}
+main{max-width:1100px;margin:0 auto;padding:12px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:var(--shadow)}
 .card h2{margin:0 0 12px;font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;color:var(--ocean)}
 @media (prefers-color-scheme: dark){ .card h2{color:var(--sea-d)} }
@@ -133,7 +140,7 @@ tr.top td{background:rgba(255,209,102,.3)}
 .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
 .quick .btn{white-space:normal}
 .err{color:var(--danger);font-size:13px;min-height:18px}
-#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ocean);color:#fff;padding:12px 16px;border-radius:14px;max-width:min(560px,calc(100vw - 32px));box-shadow:0 6px 24px rgba(0,0,0,.3);display:none;z-index:20;cursor:pointer;border-left:5px solid var(--sun)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ocean);color:#fff;padding:12px 16px;border-radius:14px;max-width:min(560px,calc(100vw - 32px));box-shadow:0 6px 24px rgba(0,0,0,.3);display:none;z-index:20;cursor:pointer;border-left:5px solid var(--sun)}
 @media (prefers-color-scheme: dark){ #toast{background:#1d3a48} }
 #toast.on{display:block}
 #toast div+div{margin-top:4px}
@@ -548,6 +555,11 @@ function viewStats() {
 }
 
 render();
+
+/* ================= PWA ================= */
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 </script>
 </body>
 </html>
