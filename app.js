@@ -137,7 +137,9 @@ function startTournament() {
   S.pairs = [];
   for (const a of p4) for (const b of p2) S.pairs.push({ id: 'pr_' + a.id + '_' + b.id, members: [a.id, b.id] });
   S.matches = []; S.stage = 'running'; S.tab = 'now';
-  const nw = assignCourts(); render();
+  const nw = assignCourts();
+  if (!S.statStart) { S.statStart = 1; track('start', { p: S.players.length, c: S.settings.courts }); }
+  render();
   toast(['Турнир начался! Пар в игре: ' + S.pairs.length, ...nw.map(courtLine)]);
 }
 function backToSetup() {
@@ -178,6 +180,10 @@ function applyResult(id, res) {
   }
   m.result = res ? Object.assign({}, res, { at: Date.now() }) : null;
   const nw = assignCourts();
+  if (isComplete() && !S.statFin) {
+    S.statFin = 1;
+    track('finish', { p: S.players.length, c: S.settings.courts, g: S.matches.filter(x => x.result).length });
+  }
   closeModal(); render();
   const msg = [];
   if (res) {
@@ -397,6 +403,38 @@ function viewStats() {
 }
 
 render();
+
+/* ================= Счётчик турниров =================
+   Отправляется только «турнир начат / завершён» + число игроков и кортов.
+   Ни имён, ни результатов, ни данных об устройстве. Без интернета событие ждёт в очереди. */
+const STATS_URL = 'https://functions.yandexcloud.net/d4es919olmenclcq2ou3';   // адрес облачной функции; пусто — счётчик выключен
+const STATS_Q = 'beachvb.statq';
+function track(e, params) {
+  if (!STATS_URL) return;
+  let q = [];
+  try { q = JSON.parse(localStorage.getItem(STATS_Q) || '[]'); } catch (x) {}
+  q.push(Object.assign({ e }, params));
+  try { localStorage.setItem(STATS_Q, JSON.stringify(q.slice(-50))); } catch (x) {}
+  flushStats();
+}
+let statsBusy = false;
+function flushStats() {
+  if (!STATS_URL || statsBusy || typeof fetch === 'undefined') return;
+  let q = [];
+  try { q = JSON.parse(localStorage.getItem(STATS_Q) || '[]'); } catch (x) { return; }
+  if (!q.length) return;
+  statsBusy = true;
+  fetch(STATS_URL + (STATS_URL.includes('?') ? '&' : '?') + new URLSearchParams(q[0]), { method: 'POST', mode: 'no-cors', keepalive: true })
+    .then(() => {
+      try { const cur = JSON.parse(localStorage.getItem(STATS_Q) || '[]'); cur.shift(); localStorage.setItem(STATS_Q, JSON.stringify(cur)); } catch (x) {}
+      statsBusy = false; flushStats();
+    })
+    .catch(() => { statsBusy = false; });
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('online', flushStats);
+  window.addEventListener('load', flushStats);
+}
 
 /* ================= PWA ================= */
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && location.protocol !== 'file:') {
