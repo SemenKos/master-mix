@@ -1,6 +1,6 @@
 
 'use strict';
-const LS = 'beachvb.mm.redesign.v1';
+const LS = 'beachvb.mm.v1';
 const POS = { 2: '2-й номер (справа)', 4: '4-й номер (слева)' };
 
 function newState() {
