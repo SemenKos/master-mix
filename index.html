@@ -26,6 +26,12 @@
 </header>
 <main id="app"></main>
 <div id="modal" onclick="if(event.target===this)closeModal()"></div>
+<div id="install" hidden>
+  <img src="./icon-192.png" alt="">
+  <div class="it"><b>Приложение «Микст»</b><span id="install-txt">Отдельное окно без браузера, работает офлайн</span></div>
+  <button class="btn sm" id="install-btn" onclick="doInstall()">Установить</button>
+  <button class="x" onclick="hideInstall(true)" aria-label="Закрыть">×</button>
+</div>
 <div id="toast" onclick="this.classList.remove('on')"></div>
 
 <script src="./app.js" defer></script>

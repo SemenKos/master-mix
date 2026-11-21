@@ -437,6 +437,42 @@ if (typeof window !== 'undefined' && window.addEventListener) {
 }
 
 /* ================= PWA ================= */
+// Android (Chrome и др.): своя кнопка «Установить» — ставит настоящее приложение, а не ярлык браузера.
+let installEvt = null;
+const INST_KEY = 'beachvb.inst';
+function isStandalone() {
+  try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; }
+}
+function installDismissed() { try { return localStorage.getItem(INST_KEY) === '0'; } catch (e) { return false; } }
+function showInstall(manual) {
+  const box = document.querySelector('#install');
+  if (!box || isStandalone() || installDismissed()) return;
+  document.querySelector('#install-txt').textContent = manual
+    ? 'Меню браузера ⋮ → «Установить приложение» (не «Добавить ярлык»)'
+    : 'Отдельное окно без браузера, работает офлайн';
+  document.querySelector('#install-btn').hidden = !!manual;
+  box.hidden = false;
+}
+function hideInstall(forever) {
+  const box = document.querySelector('#install');
+  if (box) box.hidden = true;
+  if (forever) { try { localStorage.setItem(INST_KEY, '0'); } catch (e) {} }
+}
+function doInstall() {
+  if (!installEvt) return;
+  installEvt.prompt();
+  installEvt.userChoice.then(r => { if (r && r.outcome === 'accepted') hideInstall(); }).catch(() => {});
+  installEvt = null;
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; showInstall(false); });
+  window.addEventListener('appinstalled', () => hideInstall(true));
+  // Android-браузер без такого события (Яндекс, Samsung и др.) — подсказка, где найти установку
+  window.addEventListener('load', () => setTimeout(() => {
+    if (!installEvt && /Android/i.test(navigator.userAgent || '')) showInstall(true);
+  }, 6000));
+}
+
 if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
