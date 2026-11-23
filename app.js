@@ -13,6 +13,7 @@ function load() { try { const s = localStorage.getItem(LS); return s ? JSON.pars
 function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} }
 let S = load() || newState();
 
+
 const uid = () => Math.random().toString(36).slice(2, 10);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = s => document.querySelector(s);
@@ -21,7 +22,7 @@ const pkey = (x, y) => x < y ? x + '|' + y : y + '|' + x;
 function player(id) { return S.players.find(p => p.id === id); }
 function pName(id) { const p = player(id); return p ? p.name : '?'; }
 function pair(id) { return S.pairs.find(p => p.id === id); }
-function pairName(id) { const p = pair(id); return p ? p.members.map(pName).join(' / ') : '?'; }
+function pairName(id) { const p = pair(id); return p ? p.members.map(pName).join('+') : '?'; }
 function membersOf(m) { return [...pair(m.a).members, ...pair(m.b).members]; }
 function winnerPair(m) { return m.result ? (m.result.winner === 'a' ? m.a : m.b) : null; }
 function loserPair(m) { return m.result ? (m.result.winner === 'a' ? m.b : m.a) : null; }
@@ -100,7 +101,15 @@ function assignCourts() {
     const m = { id: uid(), num: maxNum() + 1, time: n, a: pick[0].id, b: pick[1].id, court: c, result: null };
     S.matches.push(m); used.add(c); newly.push(m);
   }
+  planNext(used.size >= C);
   return newly;
+}
+// «Следующая игра» объявляется заранее и уже не меняется: она выйдет на первый освободившийся корт.
+// Если без результатов текущих игр её не собрать (все свободные игроки не складываются в две пары) — не объявляем.
+function planNext(courtsFull = true) {
+  if (S.stage !== 'running' || !courtsFull || S.matches.some(m => !m.result && !m.court)) return;
+  const I = info(), pick = pickGame(I);
+  if (pick) S.matches.push({ id: uid(), num: maxNum() + 1, time: I.T + 1, a: pick[0].id, b: pick[1].id, court: null, result: null });
 }
 
 /* ================= Места ================= */
@@ -194,7 +203,7 @@ function applyResult(id, res) {
   if (isComplete()) { const p = places()[0]; if (p) msg.push(`🏆 Турнир завершён! Победитель: <b>${esc(p.ids.map(pName).join(', '))}</b>`); }
   if (msg.length) toast(msg);
 }
-function courtLine(m) { return `Корт ${m.court}: <b>${esc(pairName(m.a))}</b> — <b>${esc(pairName(m.b))}</b>`; }
+function courtLine(m) { return `Корт ${m.court}: <b>${esc(pairName(m.a))}</b> / <b>${esc(pairName(m.b))}</b>`; }
 function setCourts(v) {
   S.settings.courts = Math.max(1, Math.min(20, +v || 1));
   const nw = assignCourts(); render(); if (nw.length) toast(nw.map(x => '▶ ' + courtLine(x)));
@@ -271,7 +280,7 @@ function viewSetup() {
   <section class="card"><h2>Турнир</h2>
     <div class="row"><label style="flex:1">Название <input style="flex:1" value="${esc(S.name)}" onchange="S.name=this.value;render()"></label></div>
     <p class="muted">Каждая пара — один 2-й и один 4-й номер. Пары постоянно меняются. Проигравшая пара в этом составе больше не играет, а оба игрока продолжают в других составах.
-    Следующая игра подбирается, когда освобождается корт: первыми выходят те, у кого меньше игр и кто дольше отдыхал, партнёры и соперники чередуются.
+    Следующая игра объявляется заранее и выходит на первый освободившийся корт, какими бы ни были результаты текущих игр: первыми выходят те, у кого меньше игр и кто дольше отдыхал, партнёры и соперники чередуются.
     Турнир заканчивается, когда из оставшихся пар уже нельзя собрать игру. Побеждает игрок с наибольшим числом побед.</p></section>
 
   <section class="card"><h2>1. Игроки</h2>
@@ -294,9 +303,11 @@ function viewRun() {
     <span style="flex:1"></span><button class="cfg" onclick="backToSetup()" title="Настройка">⚙<span> Настройка</span></button></div>${body}`;
 }
 
-function sideHTML(pairId, P) {
-  return `<div class="side">${pair(pairId).members.map(p => `<span class="pl">${esc(pName(p))} <span class="rec">${P[p].w}/${P[p].l}</span></span>`).join('<span class="amp">+</span>')}</div>`;
+function sideHTML(pairId) {
+  return `<span class="side">${pair(pairId).members.map(p => `<span class="pl">${esc(pName(p))}</span>`).join('<span class="amp">+</span>')}</span>`;
 }
+// игра в одну строку: Ваня+Миша / Коля+Петя
+function vsHTML(m) { return `<div class="vs">${sideHTML(m.a)}<span class="sl">/</span>${sideHTML(m.b)}</div>`; }
 
 function viewNow() {
   const I = info(), C = S.settings.courts;
@@ -310,20 +321,18 @@ function viewNow() {
   for (let c = 1; c <= C; c++) {
     const m = S.matches.find(x => x.court === c);
     courts += m ? `<div class="court"><div class="ch"><span>Корт ${c}</span><span>Игра №${m.num}</span></div>
-      <div class="vs">${sideHTML(m.a, I.P)}<i>против</i>${sideHTML(m.b, I.P)}</div>
+      ${vsHTML(m)}
       <div class="row"><button class="btn" onclick="openMatch('${m.id}')">Отметить победителей</button></div></div>`
       : `<div class="court free"><div class="ch"><span>Корт ${c}</span></div><div class="vs" style="font-size:15px">Свободен</div><div class="muted">${isComplete() ? 'турнир завершён' : 'нет свободных игроков для игры'}</div></div>`;
   }
-  if (!isComplete()) {
-    const pick = pickGame(I);
-    if (pick && S.matches.some(m => m.court)) courts += `<div class="court next"><div class="ch"><span>Следующая игра</span><span>предварительно</span></div>
-      <div class="vs">${sideHTML(pick[0].id, I.P)}<i>против</i>${sideHTML(pick[1].id, I.P)}</div>
-      <div class="muted">Выйдут на первый освободившийся корт. Состав может уточниться в этот момент, чтобы все играли равномерно.</div></div>`;
-  }
+  for (const m of S.matches.filter(x => !x.result && !x.court).sort(byTime)) courts += `<div class="court next"><div class="ch"><span>Следующая игра</span><span>Игра №${m.num}</span></div>
+      ${vsHTML(m)}
+      <div class="muted">Выйдут на первый освободившийся корт.</div></div>`;
   html += `<section class="card"><h2>На кортах</h2>
     <div class="row muted">Сыграно игр: <b>${done}</b> · Пар ещё в игре: <b>${alive}</b> из ${S.pairs.length}
       <span style="flex:1"></span><label>Кортов: <input type="number" min="1" max="20" value="${C}" onchange="setCourts(this.value)"></label></div>
-    <div class="courts" style="margin-top:10px">${courts}</div></section>`;
+    <div class="courts" style="margin-top:10px">${courts}</div>
+    <div class="row" style="margin-top:12px"><button class="btn ghost" onclick="shareTournament()">📲 Передать турнир на другой телефон</button></div></section>`;
 
   html += `<section class="card"><h2>Игроки</h2><div class="tblwrap"><table><thead><tr>
     <th class="nm">Игрок</th><th>Победы / поражения</th></tr></thead><tbody>
@@ -373,8 +382,7 @@ function card(m) {
   const sc = side => m.result && m.result.winner === side ? '✓' : '';
   return `<div class="mc ${m.result ? '' : 'ready'}" onclick="openMatch('${m.id}')">
     <div class="mh"><span>Игра №${m.num}</span>${m.court ? `<span class="oncourt">Корт ${m.court}</span>` : m.result ? '' : '<span>ждёт корта</span>'}</div>
-    <div class="tr ${cls('a')}"><span>${esc(pairName(m.a))}</span><b>${sc('a')}</b></div>
-    <div class="tr ${cls('b')}"><span>${esc(pairName(m.b))}</span><b>${sc('b')}</b></div>
+    <div class="tr"><span><span class="${cls('a')}">${sc('a') ? '✓ ' : ''}${esc(pairName(m.a))}</span> / <span class="${cls('b')}">${sc('b') ? '✓ ' : ''}${esc(pairName(m.b))}</span></span></div>
     </div>`;
 }
 function viewGames() {
@@ -402,7 +410,104 @@ function viewStats() {
   return h;
 }
 
+// турнир, начатый в прошлой версии, — сразу объявляем следующую игру
+if (S.stage === 'running' && S.matches) { try { planNext(S.matches.filter(m => m.court).length >= S.settings.courts); } catch (e) {} }
 render();
+
+/* ================= Передача турнира на другой телефон ================= */
+// Весь турнир упаковывается в ссылку после «#» — эта часть ссылки не уходит ни на какой сервер.
+const SHARE_V = 1;
+function packState() {
+  const pi = {}; S.pairs.forEach((p, i) => { pi[p.id] = i; });
+  const ms = S.matches.slice().sort(byTime);
+  return [SHARE_V, S.name, S.settings.courts, S.players.map(p => [p.id, p.name, p.pos]),
+    ms.map(m => [m.num, m.time, pi[m.a], pi[m.b], m.court || 0, m.result ? (m.result.winner === 'a' ? 1 : 2) : 0]),
+    S.statFin ? 1 : 0, S.tab];
+}
+function unpackState(d) {
+  if (!Array.isArray(d) || d[0] !== SHARE_V) throw new Error('format');
+  const [, name, courts, pl, ms, fin, tab] = d;
+  const st = newState();
+  st.name = String(name || 'Мастер микст'); st.settings.courts = Math.max(1, Math.min(20, +courts || 1));
+  st.players = pl.map(([id, n, pos]) => ({ id: String(id), name: String(n), pos: pos === 4 ? 4 : 2 }));
+  const p2 = st.players.filter(p => p.pos === 2), p4 = st.players.filter(p => p.pos === 4);
+  for (const a of p4) for (const b of p2) st.pairs.push({ id: 'pr_' + a.id + '_' + b.id, members: [a.id, b.id] });
+  const base = Date.now() - ms.length * 1000;
+  st.matches = ms.map(([num, time, a, b, court, w]) => {
+    if (!st.pairs[a] || !st.pairs[b]) throw new Error('pair');
+    return { id: uid(), num, time, a: st.pairs[a].id, b: st.pairs[b].id, court: court || null,
+      result: w ? { winner: w === 1 ? 'a' : 'b', sets: [], at: base + time * 1000 } : null };
+  });
+  st.stage = 'running'; st.tab = ['now', 'games', 'stats'].includes(tab) ? tab : 'now';
+  st.statStart = 1; st.statFin = fin ? 1 : 0;   // для счётчика это тот же турнир, а не новый
+  return st;
+}
+const b64u = bytes => { let s = ''; bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = str => { const s = atob(str.replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); };
+async function streamBytes(bytes, T) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(T)).arrayBuffer()); }
+async function encodeState() {
+  const raw = new TextEncoder().encode(JSON.stringify(packState()));
+  if (typeof CompressionStream !== 'undefined') {
+    try { return 'z' + b64u(await streamBytes(raw, new CompressionStream('deflate-raw'))); } catch (e) {}
+  }
+  return 'u' + b64u(raw);
+}
+async function decodeState(str) {
+  let bytes = unb64u(str.slice(1));
+  if (str[0] === 'z') bytes = await streamBytes(bytes, new DecompressionStream('deflate-raw'));
+  else if (str[0] !== 'u') throw new Error('format');
+  return unpackState(JSON.parse(new TextDecoder().decode(bytes)));
+}
+function shareLink(code) { return location.href.split('#')[0].split('?')[0] + '#t=' + code; }
+async function shareTournament() {
+  let url;
+  try { url = shareLink(await encodeState()); } catch (e) { return toast(['Не удалось подготовить ссылку']); }
+  let qr = '';
+  try { const q = qrcode(0, 'L'); q.addData(url); q.make(); qr = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true }); } catch (e) {}
+  const done = S.matches.filter(m => m.result).length;
+  $('#modal').innerHTML = `<div class="dlg share">
+    <h3>Передать турнир</h3>
+    <p class="muted">Наведите камеру другого телефона на код — турнир откроется там с того же места (${S.players.length} игроков, сыграно игр: ${done}). Ставить приложение не нужно.</p>
+    ${qr ? `<div class="qr">${qr}</div>` : '<p class="muted">QR-код не поместился — отправьте ссылку.</p>'}
+    <div class="row" style="justify-content:space-between;margin-top:12px">
+      <button class="btn" onclick="sendLink()">Отправить ссылкой</button>
+      <button class="btn ghost sm" onclick="closeModal()">Закрыть</button></div>
+    <p class="muted" style="margin-top:10px">После передачи продолжайте отмечать игры на том телефоне. Здесь останется копия на текущий момент — она сама не обновляется. Вернуть турнир обратно можно так же.</p></div>`;
+  $('#modal').dataset.url = url;
+  $('#modal').classList.add('on');
+}
+async function sendLink() {
+  const url = $('#modal').dataset.url; if (!url) return;
+  if (navigator.share) { try { await navigator.share({ title: S.name, text: 'Турнир «' + S.name + '» — открыть и продолжить:', url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(url); toast(['Ссылка скопирована — вставьте её в мессенджер']); }
+  catch (e) { prompt('Скопируйте ссылку:', url); }
+}
+let incoming = null;
+async function checkIncoming() {
+  if (typeof location === 'undefined' || !location.hash.startsWith('#t=')) return;
+  const code = location.hash.slice(3);
+  try { history.replaceState(null, '', location.href.split('#')[0]); } catch (e) {}
+  try { incoming = await decodeState(code); } catch (e) { return toast(['Ссылка на турнир повреждена или неполная — попросите прислать её ещё раз']); }
+  const done = incoming.matches.filter(m => m.result).length;
+  const mine = S.stage === 'running' && S.matches.some(m => m.result);
+  $('#modal').innerHTML = `<div class="dlg">
+    <h3>Принять турнир?</h3>
+    <p><b>${esc(incoming.name)}</b><br>${incoming.players.length} игроков · сыграно игр: ${done}</p>
+    ${mine ? '<p class="muted" style="color:var(--danger)">Турнир, который сейчас идёт на этом телефоне, будет заменён.</p>' : ''}
+    <div class="row" style="justify-content:space-between">
+      <button class="btn" onclick="acceptIncoming()">Принять</button>
+      <button class="btn ghost sm" onclick="incoming=null;closeModal()">Отмена</button></div></div>`;
+  $('#modal').classList.add('on');
+}
+function acceptIncoming() {
+  if (!incoming) return;
+  S = incoming; incoming = null; closeModal(); render();
+  toast(['Турнир принят — продолжайте отмечать игры здесь']);
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('hashchange', checkIncoming);
+  checkIncoming();
+}
 
 /* ================= Счётчик турниров =================
    Отправляется только «турнир начат / завершён» + число игроков и кортов.

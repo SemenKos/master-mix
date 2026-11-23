@@ -168,3 +168,13 @@ input,select,textarea{background:#fbfaf6;border-color:#d7e2e5;border-radius:11px
 #install .x{flex:none;background:none;border:0;color:#b9c8d6;font-size:24px;line-height:1;padding:4px 6px;cursor:pointer}
 @media(display-mode:standalone){#install{display:none!important}}
 body:has(#install:not([hidden])) main{padding-bottom:110px}
+/* игра в одну строку: Ваня+Миша / Коля+Петя */
+.court .vs{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px 8px;margin:10px 0}
+.court .vs .side{display:inline-flex;flex-wrap:nowrap;gap:2px;padding:7px 10px}
+.court .vs .amp{margin:0 1px}
+.court .vs .sl{color:var(--muted);font-weight:500;font-size:20px}
+.mc .tr .w{font-weight:700;color:var(--win)}
+.mc .tr .l{color:var(--muted);text-decoration:line-through}
+/* передача турнира: QR-код */
+.share .qr{background:#fff;border-radius:14px;padding:8px;margin:10px auto 0;width:min(320px,100%)}
+.share .qr svg{display:block;width:100%;height:auto}
