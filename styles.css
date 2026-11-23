@@ -178,3 +178,9 @@ body:has(#install:not([hidden])) main{padding-bottom:110px}
 /* передача турнира: QR-код */
 .share .qr{background:#fff;border-radius:14px;padding:8px;margin:10px auto 0;width:min(320px,100%)}
 .share .qr svg{display:block;width:100%;height:auto}
+/* приём турнира: сканер и подсказки */
+.recv .row{flex-wrap:wrap}
+.scan .cam{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:1/1;margin:10px 0}
+.scan video{width:100%;height:100%;object-fit:cover;display:block}
+.scan .cam i{position:absolute;inset:14%;border:3px solid rgba(255,255,255,.9);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+.dlg .hint{background:var(--ready);border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px;line-height:1.4}

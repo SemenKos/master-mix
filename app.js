@@ -174,7 +174,7 @@ function openMatch(id) {
       <button class="btn ghost sm" onclick="closeModal()">Закрыть</button></div></div>`;
   $('#modal').classList.add('on');
 }
-function closeModal() { $('#modal').classList.remove('on'); $('#modal').innerHTML = ''; }
+function closeModal() { stopScan(); $('#modal').classList.remove('on'); $('#modal').innerHTML = ''; }
 function applyResult(id, res) {
   const m = S.matches.find(m => m.id === id); const prev = m.result;
   if (prev && res && prev.winner !== res.winner) {
@@ -277,6 +277,11 @@ function viewSetup() {
       <div class="chips">${list.map(p => `<span class="chip"><span onclick="renamePlayer('${p.id}')" title="Нажмите, чтобы переименовать" style="cursor:pointer">${esc(p.name)}</span><button onclick="setPos('${p.id}',${other})" title="Перевести в ${other}-й номер">⇄</button><button onclick="delPlayer('${p.id}')" title="Удалить">×</button></span>`).join('') || '<span class="muted">пока никого</span>'}</div></div>`;
   };
   return `
+  <section class="card recv"><h2>Продолжить турнир с другого телефона</h2>
+    <p class="muted">На том телефоне: «Передать турнир». Здесь — отсканируйте его QR-код или вставьте присланную ссылку.</p>
+    <div class="row"><button class="btn" onclick="startScan()">📷 Сканировать QR-код</button>
+      <button class="btn ghost" onclick="pasteLink()">📋 Вставить ссылку</button></div></section>
+
   <section class="card"><h2>Турнир</h2>
     <div class="row"><label style="flex:1">Название <input style="flex:1" value="${esc(S.name)}" onchange="S.name=this.value;render()"></label></div>
     <p class="muted">Каждая пара — один 2-й и один 4-й номер. Пары постоянно меняются. Проигравшая пара в этом составе больше не играет, а оба игрока продолжают в других составах.
@@ -416,12 +421,12 @@ render();
 
 /* ================= Передача турнира на другой телефон ================= */
 // Весь турнир упаковывается в ссылку после «#» — эта часть ссылки не уходит ни на какой сервер.
-const SHARE_V = 1;
+const SHARE_V = 2;   // v2: без внутренних id игроков — ссылка и QR-код короче
 function packState() {
   const pi = {}; S.pairs.forEach((p, i) => { pi[p.id] = i; });
   const ms = S.matches.slice().sort(byTime);
-  return [SHARE_V, S.name, S.settings.courts, S.players.map(p => [p.id, p.name, p.pos]),
-    ms.map(m => [m.num, m.time, pi[m.a], pi[m.b], m.court || 0, m.result ? (m.result.winner === 'a' ? 1 : 2) : 0]),
+  return [SHARE_V, S.name, S.settings.courts, S.players.map(p => [p.name, p.pos]),
+    ms.map((m, i) => [m.num === i + 1 ? 0 : m.num, pi[m.a], pi[m.b], m.court || 0, m.result ? (m.result.winner === 'a' ? 1 : 2) : 0]),
     S.statFin ? 1 : 0, S.tab];
 }
 function unpackState(d) {
@@ -429,11 +434,12 @@ function unpackState(d) {
   const [, name, courts, pl, ms, fin, tab] = d;
   const st = newState();
   st.name = String(name || 'Мастер микст'); st.settings.courts = Math.max(1, Math.min(20, +courts || 1));
-  st.players = pl.map(([id, n, pos]) => ({ id: String(id), name: String(n), pos: pos === 4 ? 4 : 2 }));
+  st.players = pl.map(([n, pos]) => ({ id: uid(), name: String(n), pos: pos === 4 ? 4 : 2 }));
   const p2 = st.players.filter(p => p.pos === 2), p4 = st.players.filter(p => p.pos === 4);
   for (const a of p4) for (const b of p2) st.pairs.push({ id: 'pr_' + a.id + '_' + b.id, members: [a.id, b.id] });
   const base = Date.now() - ms.length * 1000;
-  st.matches = ms.map(([num, time, a, b, court, w]) => {
+  st.matches = ms.map(([num, a, b, court, w], i) => {
+    const time = i + 1; num = num || time;
     if (!st.pairs[a] || !st.pairs[b]) throw new Error('pair');
     return { id: uid(), num, time, a: st.pairs[a].id, b: st.pairs[b].id, court: court || null,
       result: w ? { winner: w === 1 ? 'a' : 'b', sets: [], at: base + time * 1000 } : null };
@@ -483,21 +489,104 @@ async function sendLink() {
   catch (e) { prompt('Скопируйте ссылку:', url); }
 }
 let incoming = null;
-async function checkIncoming() {
+const isIOS = () => typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+// достаёт код турнира из ссылки (или из самого кода)
+function codeFrom(text) {
+  const t = String(text || '').trim(), i = t.indexOf('#t=');
+  const c = i >= 0 ? t.slice(i + 3) : t;
+  return /^[zu][A-Za-z0-9_-]{8,}$/.test(c) ? c : null;
+}
+function checkIncoming() {
   if (typeof location === 'undefined' || !location.hash.startsWith('#t=')) return;
   const code = location.hash.slice(3);
   try { history.replaceState(null, '', location.href.split('#')[0]); } catch (e) {}
-  try { incoming = await decodeState(code); } catch (e) { return toast(['Ссылка на турнир повреждена или неполная — попросите прислать её ещё раз']); }
+  // открыто в Safari на iPhone, а не в приложении с экрана «Домой»: подскажем, как перенести в приложение
+  showIncoming(code, isIOS() && !isStandalone());
+}
+async function showIncoming(code, safariHint) {
+  try { incoming = await decodeState(code); } catch (e) { incoming = null; return toast(['Ссылка на турнир повреждена или неполная — попросите прислать её ещё раз']); }
   const done = incoming.matches.filter(m => m.result).length;
   const mine = S.stage === 'running' && S.matches.some(m => m.result);
   $('#modal').innerHTML = `<div class="dlg">
     <h3>Принять турнир?</h3>
     <p><b>${esc(incoming.name)}</b><br>${incoming.players.length} игроков · сыграно игр: ${done}</p>
     ${mine ? '<p class="muted" style="color:var(--danger)">Турнир, который сейчас идёт на этом телефоне, будет заменён.</p>' : ''}
+    ${safariHint ? `<div class="hint"><b>Установили «Микст» на экран «Домой»?</b> Турнир откроется здесь, в Safari, а не в приложении.
+      Чтобы вести его в приложении: нажмите «Скопировать ссылку», откройте «Микст» → «Принять турнир» → «Вставить ссылку».
+      <div class="row" style="margin-top:8px"><button class="btn ghost sm" onclick="copyIncoming()">Скопировать ссылку</button></div></div>` : ''}
     <div class="row" style="justify-content:space-between">
-      <button class="btn" onclick="acceptIncoming()">Принять</button>
+      <button class="btn" onclick="acceptIncoming()">${safariHint ? 'Принять здесь' : 'Принять'}</button>
       <button class="btn ghost sm" onclick="incoming=null;closeModal()">Отмена</button></div></div>`;
+  $('#modal').dataset.code = code;
   $('#modal').classList.add('on');
+}
+async function copyIncoming() {
+  const url = shareLink($('#modal').dataset.code || '');
+  try { await navigator.clipboard.writeText(url); toast(['Ссылка скопирована. Откройте «Микст» с экрана «Домой» → «Вставить ссылку»']); }
+  catch (e) { prompt('Скопируйте ссылку:', url); }
+}
+async function pasteLink() {
+  let text = '';
+  try { text = await navigator.clipboard.readText(); } catch (e) {}
+  if (!codeFrom(text)) text = prompt('Вставьте ссылку на турнир:', '') || '';
+  if (!text) return;
+  const code = codeFrom(text);
+  if (!code) return toast(['Это не ссылка на турнир «Мастер микст»']);
+  showIncoming(code, false);
+}
+
+/* --- сканер QR-кода камерой внутри приложения --- */
+let scan = null;
+function loadJsQR() {
+  if (window.jsQR) return Promise.resolve();
+  return new Promise((ok, fail) => { const sc = document.createElement('script'); sc.src = './jsqr.min.js'; sc.onload = ok; sc.onerror = fail; document.head.appendChild(sc); });
+}
+async function startScan() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast(['Камера здесь недоступна — используйте «Вставить ссылку»']);
+  $('#modal').innerHTML = `<div class="dlg scan"><h3>Наведите камеру на QR-код</h3>
+    <div class="cam"><video playsinline muted autoplay></video><i></i></div>
+    <p class="muted" id="scan-st">Включаю камеру…</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost sm" onclick="closeModal()">Отмена</button></div></div>`;
+  $('#modal').classList.add('on');
+  const my = scan = { stream: null, raf: 0 };
+  try {
+    const [stream] = await Promise.all([navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }), loadJsQR()]);
+    if (scan !== my) { stream.getTracks().forEach(t => t.stop()); return; }
+    my.stream = stream;
+  } catch (e) {
+    if (scan !== my) return;
+    scan = null;
+    const st = $('#scan-st');
+    if (st) st.innerHTML = e && e.name === 'NotAllowedError'
+      ? 'Нет доступа к камере. Разрешите его в настройках телефона или используйте «Вставить ссылку».'
+      : 'Не удалось включить камеру — используйте «Вставить ссылку».';
+    return;
+  }
+  const v = $('.scan video'); v.srcObject = my.stream; try { await v.play(); } catch (e) {}
+  $('#scan-st').textContent = 'Ищу код…';
+  const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+  const tick = () => {
+    if (scan !== my) return;
+    if (v.readyState >= 2 && v.videoWidth) {
+      const k = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight));
+      cv.width = Math.round(v.videoWidth * k); cv.height = Math.round(v.videoHeight * k);
+      cx.drawImage(v, 0, 0, cv.width, cv.height);
+      const r = window.jsQR(cx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height, { inversionAttempts: 'dontInvert' });
+      if (r && r.data) {
+        const code = codeFrom(r.data);
+        if (code) { closeModal(); showIncoming(code, false); return; }
+        $('#scan-st').textContent = 'Это не QR-код турнира «Мастер микст»';
+      }
+    }
+    my.raf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+function stopScan() {
+  if (!scan) return;
+  cancelAnimationFrame(scan.raf);
+  if (scan.stream) scan.stream.getTracks().forEach(t => t.stop());
+  scan = null;
 }
 function acceptIncoming() {
   if (!incoming) return;
