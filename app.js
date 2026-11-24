@@ -78,6 +78,59 @@ function pickGame(I) {
   }
   return best;
 }
+
+// ---- Прогноз второго приоритета ----
+// Нужен, когда из отдыхающих игру не собрать. Тогда в следующую игру можно взять и тех, кто сейчас на корте:
+// игра им гарантирована при любом исходе, если это НЕ их нынешняя пара (она может проиграть и выбыть).
+// Приоритет игроков:
+//   1) отдыхающие — чем дольше сидит, тем выше; при равной паузе — у кого меньше игр в турнире;
+//   2) играющие сейчас: чем больше игр подряд (включая нынешнюю), тем ниже приоритет;
+//      при равной серии (например, у всех первая игра после паузы) — у кого меньше игр в турнире.
+// При равных приоритетах — разнообразие напарников и соперников, затем случайно.
+function pickGameAhead(I) {
+  const C = Math.max(1, S.settings.courts);
+  const onCourt = S.matches.filter(m => m.court && !m.result);
+  const curPairs = new Set(onCourt.flatMap(m => [m.a, m.b]));
+  const playing = {};   // игрок на корте → сколько игр подряд он играет, включая нынешнюю (1 — первая после паузы)
+  for (const m of onCourt) for (const x of membersOf(m)) playing[x] = streakOf(x, m);
+  const waiting = new Set(S.matches.filter(m => !m.result && !m.court).flatMap(membersOf));
+  const prio = x => {
+    const p = I.P[x];
+    if (!(x in playing)) return -1e5 * ((I.T - p.last) / C) + 1000 * p.g;   // отдыхает
+    return 1e6 * playing[x] + 1000 * p.g;                              // на корте
+  };
+  const cand = S.pairs.filter(p => !I.lost.has(p.id) && !curPairs.has(p.id) && p.members.every(x => I.P[x] && !waiting.has(x)));
+  let best = null, bs = Infinity;
+  for (let i = 0; i < cand.length; i++) for (let j = i + 1; j < cand.length; j++) {
+    const a = cand[i], b = cand[j];
+    if (a.members[0] === b.members[0] || a.members[1] === b.members[1]) continue;
+    const ps = [...a.members, ...b.members];
+    if (ps.every(x => !(x in playing))) continue;   // только отдыхающие — это первый приоритет, он уже не нашёл игру
+    let s = ps.reduce((t, x) => t + prio(x), 0)
+      + 40 * ((I.pairG[a.id] || 0) + (I.pairG[b.id] || 0));
+    for (const t of [a, b]) for (const x of t.members) if (I.P[x].lastPair === t.id) s += 60;
+    for (const x of a.members) for (const y of b.members) s += 4 * (I.opp[pkey(x, y)] || 0);
+    s += Math.random();
+    if (s < bs) { bs = s; best = [a, b]; }
+  }
+  return best;
+}
+function streakOf(x, m) {
+  const ms = S.matches.filter(q => q.time <= m.time && membersOf(q).includes(x)).sort(byTime);
+  let k = 0;
+  for (let i = ms.length - 1; i >= 0; i--) { k++; if (!(ms[i].cons || []).includes(x)) break; }
+  return k;
+}
+// кто из игроков новой игры выходит подряд, без паузы: только что доиграл или ещё доигрывает
+let justDone = null;
+function consOf(pick, ahead) {   // ahead — игра объявлена заранее: подряд только те, кто ещё на корте
+  const out = [];
+  for (const x of [...pick[0].members, ...pick[1].members]) {
+    const prev = S.matches.filter(m => [m.a, m.b].some(t => pair(t).members.includes(x))).sort(byTime).pop();
+    if (prev && (!prev.result || (!ahead && prev.id === justDone))) out.push(x);
+  }
+  return out;
+}
 function isComplete() { return S.stage === 'running' && S.matches.every(m => m.result) && !pickGame(info()); }
 
 /* ================= Корты ================= */
@@ -94,22 +147,24 @@ function assignCourts() {
     m.court = freeCourt(); used.add(m.court); membersOf(m).forEach(p => busy.add(p)); newly.push(m);
   }
   // затем — новые игры на свободные корты
-  while (used.size < C && !S.matches.some(m => !m.result && !m.court)) {
+  // (объявленная игра, которая ждёт ещё играющих, корт не держит: на свободный корт — новая игра из свободных)
+  while (used.size < C) {
     const I = info(), pick = pickGame(I);
     if (!pick) break;
     const n = I.T + 1, c = freeCourt();
-    const m = { id: uid(), num: maxNum() + 1, time: n, a: pick[0].id, b: pick[1].id, court: c, result: null };
+    const m = { id: uid(), num: maxNum() + 1, time: n, a: pick[0].id, b: pick[1].id, court: c, result: null, cons: consOf(pick) };
     S.matches.push(m); used.add(c); newly.push(m);
   }
   planNext(used.size >= C);
   return newly;
 }
 // «Следующая игра» объявляется заранее и уже не меняется: она выйдет на первый освободившийся корт.
-// Если без результатов текущих игр её не собрать (все свободные игроки не складываются в две пары) — не объявляем.
+// Сначала — из отдыхающих (основные правила). Не собрать — прогноз второго приоритета с теми, кто сейчас играет.
+// Если и так не собрать без результатов текущих игр — не объявляем.
 function planNext(courtsFull = true) {
   if (S.stage !== 'running' || !courtsFull || S.matches.some(m => !m.result && !m.court)) return;
-  const I = info(), pick = pickGame(I);
-  if (pick) S.matches.push({ id: uid(), num: maxNum() + 1, time: I.T + 1, a: pick[0].id, b: pick[1].id, court: null, result: null });
+  const I = info(), pick = pickGame(I) || pickGameAhead(I);
+  if (pick) S.matches.push({ id: uid(), num: maxNum() + 1, time: I.T + 1, a: pick[0].id, b: pick[1].id, court: null, result: null, cons: consOf(pick, true) });
 }
 
 /* ================= Места ================= */
@@ -188,7 +243,9 @@ function applyResult(id, res) {
     }
   }
   m.result = res ? Object.assign({}, res, { at: Date.now() }) : null;
+  justDone = res && !prev ? m.id : null;
   const nw = assignCourts();
+  justDone = null;
   if (isComplete() && !S.statFin) {
     S.statFin = 1;
     track('finish', { p: S.players.length, c: S.settings.courts, g: S.matches.filter(x => x.result).length });
@@ -285,7 +342,7 @@ function viewSetup() {
   <section class="card"><h2>Турнир</h2>
     <div class="row"><label style="flex:1">Название <input style="flex:1" value="${esc(S.name)}" onchange="S.name=this.value;render()"></label></div>
     <p class="muted">Каждая пара — один 2-й и один 4-й номер. Пары постоянно меняются. Проигравшая пара в этом составе больше не играет, а оба игрока продолжают в других составах.
-    Следующая игра объявляется заранее и выходит на первый освободившийся корт, какими бы ни были результаты текущих игр: первыми выходят те, у кого меньше игр и кто дольше отдыхал, партнёры и соперники чередуются.
+    Следующая игра объявляется заранее и обязательно состоится, какими бы ни были результаты текущих игр: первыми выходят те, у кого меньше игр и кто дольше отдыхал, партнёры и соперники чередуются. Если из отдыхающих игру не собрать, в неё берут и тех, кто сейчас на корте (но не в нынешнем составе пары): сначала тех, у кого это первая игра после паузы и меньше игр.
     Турнир заканчивается, когда из оставшихся пар уже нельзя собрать игру. Побеждает игрок с наибольшим числом побед.</p></section>
 
   <section class="card"><h2>1. Игроки</h2>
@@ -308,6 +365,11 @@ function viewRun() {
     <span style="flex:1"></span><button class="cfg" onclick="backToSetup()" title="Настройка">⚙<span> Настройка</span></button></div>${body}`;
 }
 
+function waitText(m) {
+  const mem = membersOf(m);
+  const cs = [...new Set(S.matches.filter(x => x.court && !x.result && membersOf(x).some(p => mem.includes(p))).map(x => x.court))].sort((a, b) => a - b);
+  return cs.length ? `Выйдут, когда закончится игра на ${cs.length > 1 ? 'кортах ' + cs.join(' и ') : 'корте ' + cs[0]} — при любом её результате.` : 'Выйдут на первый освободившийся корт.';
+}
 function sideHTML(pairId) {
   return `<span class="side">${pair(pairId).members.map(p => `<span class="pl">${esc(pName(p))}</span>`).join('<span class="amp">+</span>')}</span>`;
 }
@@ -332,7 +394,7 @@ function viewNow() {
   }
   for (const m of S.matches.filter(x => !x.result && !x.court).sort(byTime)) courts += `<div class="court next"><div class="ch"><span>Следующая игра</span><span>Игра №${m.num}</span></div>
       ${vsHTML(m)}
-      <div class="muted">Выйдут на первый освободившийся корт.</div></div>`;
+      <div class="muted">${waitText(m)}</div></div>`;
   html += `<section class="card"><h2>На кортах</h2>
     <div class="row muted">Сыграно игр: <b>${done}</b> · Пар ещё в игре: <b>${alive}</b> из ${S.pairs.length}
       <span style="flex:1"></span><label>Кортов: <input type="number" min="1" max="20" value="${C}" onchange="setCourts(this.value)"></label></div>
@@ -426,7 +488,8 @@ function packState() {
   const pi = {}; S.pairs.forEach((p, i) => { pi[p.id] = i; });
   const ms = S.matches.slice().sort(byTime);
   return [SHARE_V, S.name, S.settings.courts, S.players.map(p => [p.name, p.pos]),
-    ms.map((m, i) => [m.num === i + 1 ? 0 : m.num, pi[m.a], pi[m.b], m.court || 0, m.result ? (m.result.winner === 'a' ? 1 : 2) : 0]),
+    ms.map((m, i) => [m.num === i + 1 ? 0 : m.num, pi[m.a], pi[m.b], m.court || 0, m.result ? (m.result.winner === 'a' ? 1 : 2) : 0,
+      membersOf(m).reduce((k, x, j) => k | ((m.cons || []).includes(x) ? 1 << j : 0), 0)]),
     S.statFin ? 1 : 0, S.tab];
 }
 function unpackState(d) {
@@ -438,11 +501,12 @@ function unpackState(d) {
   const p2 = st.players.filter(p => p.pos === 2), p4 = st.players.filter(p => p.pos === 4);
   for (const a of p4) for (const b of p2) st.pairs.push({ id: 'pr_' + a.id + '_' + b.id, members: [a.id, b.id] });
   const base = Date.now() - ms.length * 1000;
-  st.matches = ms.map(([num, a, b, court, w], i) => {
+  st.matches = ms.map(([num, a, b, court, w, cb], i) => {
     const time = i + 1; num = num || time;
     if (!st.pairs[a] || !st.pairs[b]) throw new Error('pair');
     return { id: uid(), num, time, a: st.pairs[a].id, b: st.pairs[b].id, court: court || null,
-      result: w ? { winner: w === 1 ? 'a' : 'b', sets: [], at: base + time * 1000 } : null };
+      result: w ? { winner: w === 1 ? 'a' : 'b', sets: [], at: base + time * 1000 } : null,
+      cons: [...st.pairs[a].members, ...st.pairs[b].members].filter((x, j) => (cb || 0) & (1 << j)) };
   });
   st.stage = 'running'; st.tab = ['now', 'games', 'stats'].includes(tab) ? tab : 'now';
   st.statStart = 1; st.statFin = fin ? 1 : 0;   // для счётчика это тот же турнир, а не новый

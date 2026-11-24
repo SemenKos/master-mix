@@ -1,7 +1,7 @@
 // Service worker «Мастер микст»: приложение работает без интернета,
 // а при наличии сети всегда берёт свежие версии файлов.
 const PREFIX = 'master-mix-v';           // свои кэши; чужие (другие приложения на этом же домене) не трогаем
-const CACHE = PREFIX + '8';
+const CACHE = PREFIX + '9';
 const CORE = ['./', './index.html', './styles.css', './app.js', './qrcode.min.js', './jsqr.min.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './icon-maskable-192.png', './apple-touch-icon.png', './favicon-32.png'];
 
 self.addEventListener('install', e => {
