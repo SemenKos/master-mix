@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Как это работает — Мастер микст</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Микст">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#071a35">
+<meta name="description" content="Как устроен турнир «Мастер микст»: правила для игроков и подсказки для организаторов.">
+<link rel="stylesheet" href="./styles.css">
+<style>
+  .help{max-width:720px;margin:0 auto}
+  .help ol,.help ul{margin:0;padding-left:22px}
+  .help li{margin:6px 0;line-height:1.45}
+  .help p{line-height:1.45;margin:0 0 8px}
+  .help .lead{font-size:17px}
+  .help b{color:var(--ink)}
+  .help .back{display:block;text-align:center;margin:8px 0 24px}
+</style>
+</head>
+<body>
+<header>
+  <h1><img src="./icon-192.png" alt="" class="brand-mark"><span id="title">Как это работает<small>мастер микст</small></span></h1>
+  <a class="btn sm" href="./">← К турниру</a>
+</header>
+<main class="help">
+
+<section class="card"><h2>Суть за 20 секунд</h2>
+  <p class="lead">Каждый играет <b>за себя</b>, а напарники меняются. Пара всегда из одного <b>2-го</b> и одного <b>4-го</b> номера.</p>
+  <ul>
+    <li>Проиграли вместе — <b>этот состав больше не играет</b>. Оба игрока продолжают с другими напарниками.</li>
+    <li>Победил — играешь дальше, и с этим напарником тоже можно встретиться снова.</li>
+    <li>Турнир заканчивается, когда из оставшихся пар уже нельзя собрать игру.</li>
+    <li><b>Побеждает тот, у кого больше всего побед.</b> При равенстве — выше процент побед.</li>
+  </ul>
+</section>
+
+<section class="card"><h2>Как выбирается следующая игра</h2>
+  <p>Пары составляет программа, а не организатор. Порядок правил — по важности:</p>
+  <ol>
+    <li>Первыми выходят те, у кого <b>меньше сыгранных игр</b>.</li>
+    <li>Затем — кто <b>дольше отдыхает</b>.</li>
+    <li>Программа старается дать <b>нового напарника</b> и <b>новых соперников</b>.</li>
+    <li>Если всё равно — <b>жребий</b>. Поэтому первые игры турнира — по сути жеребьёвка.</li>
+  </ol>
+  <p style="margin-top:10px"><b>Следующая игра объявляется заранее и обязательно состоится</b> — при любом исходе текущих игр.</p>
+  <p>Если из отдыхающих игру не собрать, в неё берут и тех, кто сейчас на корте (но не в нынешнем составе пары). Сначала — отдыхающих, потом тех, у кого это первая игра после паузы, и в последнюю очередь — кто играет несколько игр подряд.</p>
+</section>
+
+<section class="card"><h2>Организатору</h2>
+  <ol>
+    <li><b>Настройка:</b> впишите имена 2-х и 4-х номеров (минимум по 2), число кортов — «Начать турнир».</li>
+    <li><b>По ходу:</b> после игры нажмите «Отметить победителей» и выберите пару. Счёт не нужен.</li>
+    <li><b>Ошиблись?</b> «Все игры» или «Последние результаты» → «Изменить». Если от исправления зависят более поздние игры, программа предупредит и перестроит расписание.</li>
+    <li><b>Корты</b> можно добавлять и убирать прямо во время турнира.</li>
+    <li><b>Нужно уйти?</b> «Передать турнир на другой телефон» → покажите QR-код. На другом телефоне: «Сканировать QR-код» или «Вставить ссылку» — турнир продолжится с того же места.</li>
+  </ol>
+  <p style="margin-top:10px">На вкладке «Сейчас» видно, кто на корте, кто следующий и сколько каждый сыграл и отдыхал. Итоги — на вкладке «Статистика».</p>
+</section>
+
+<section class="card"><h2>Полезно знать</h2>
+  <ul>
+    <li>Работает <b>без интернета</b>. Можно установить на телефон: «Поделиться» → «На экран „Домой“» (iPhone) или «Установить» (Android).</li>
+    <li>Все данные турнира хранятся <b>только на этом телефоне</b>. Наружу уходит лишь анонимный счётчик «турнир начат / завершён» с числом игроков и кортов — без имён.</li>
+  </ul>
+</section>
+
+<a class="btn back" href="./">← Вернуться к турниру</a>
+</main>
+</body>
+</html>

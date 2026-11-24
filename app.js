@@ -347,9 +347,8 @@ function viewSetup() {
 
   <section class="card"><h2>Турнир</h2>
     <div class="row"><label style="flex:1">Название <input style="flex:1" value="${esc(S.name)}" onchange="S.name=this.value;render()"></label></div>
-    <p class="muted">Каждая пара — один 2-й и один 4-й номер. Пары постоянно меняются. Проигравшая пара в этом составе больше не играет, а оба игрока продолжают в других составах.
-    Следующая игра объявляется заранее и обязательно состоится, какими бы ни были результаты текущих игр: первыми выходят те, у кого меньше игр и кто дольше отдыхал, партнёры и соперники чередуются. Если из отдыхающих игру не собрать, в неё берут и тех, кто сейчас на корте (но не в нынешнем составе пары): сначала тех, у кого это первая игра после паузы и меньше игр.
-    Турнир заканчивается, когда из оставшихся пар уже нельзя собрать игру. Побеждает игрок с наибольшим числом побед.</p></section>
+    <p class="muted">Каждый играет за себя, напарники меняются: пара — один 2-й и один 4-й номер. Проигравший состав больше не играет, а оба игрока продолжают с другими. Побеждает тот, у кого больше побед.
+    <a href="./help.html">Как это работает →</a></p></section>
 
   <section class="card"><h2>1. Игроки</h2>
     <div class="pcols">${col(2)}${col(4)}</div>
@@ -368,7 +367,7 @@ function viewRun() {
   const tabs = { now: 'Сейчас', games: 'Все игры', stats: 'Статистика' };
   const body = S.tab === 'games' ? viewGames() : S.tab === 'stats' ? viewStats() : viewNow();
   return `<div class="tabs">${Object.entries(tabs).map(([k, v]) => `<button class="${S.tab === k ? 'on' : ''}" onclick="S.tab='${k}';render()">${v}</button>`).join('')}
-    <span style="flex:1"></span><button class="cfg" onclick="backToSetup()" title="Настройка">⚙<span> Настройка</span></button></div>${body}`;
+    <span style="flex:1"></span><a class="cfg" href="./help.html" title="Как это работает">?<span> Правила</span></a><button class="cfg" onclick="backToSetup()" title="Настройка">⚙<span> Настройка</span></button></div>${body}`;
 }
 
 function waitText(m) {

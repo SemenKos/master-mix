@@ -193,3 +193,4 @@ table.rest tr.off td{color:var(--muted)}
 .tag.nx{background:var(--sand);color:#3a2c00}
 .tag.rs{background:var(--ready);color:var(--ink)}
 .tag.out{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.tabs a.cfg{text-decoration:none;font-weight:700;color:var(--muted);font-size:16px}
