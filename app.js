@@ -155,6 +155,12 @@ function assignCourts() {
     const m = { id: uid(), num: maxNum() + 1, time: n, a: pick[0].id, b: pick[1].id, court: c, result: null, cons: consOf(pick) };
     S.matches.push(m); used.add(c); newly.push(m);
   }
+  // кто сидел, когда эти игры начались (для счёта отдыхов): все ещё участвующие, кроме тех, кто на кортах
+  if (newly.length) {
+    const I = info(), on = new Set(S.matches.filter(m => m.court && !m.result).flatMap(membersOf));
+    const idle = S.players.map(p => p.id).filter(id => !on.has(id) && hasPairLeft(I, id));
+    newly.forEach(m => { m.idle = idle; });
+  }
   planNext(used.size >= C);
   return newly;
 }
@@ -408,16 +414,7 @@ function viewNow() {
 
   html += partnersCard(I);
 
-  const rest = Object.values(I.P).filter(p => !I.busy.has(p.id));
-  const resting = rest.filter(p => hasPairLeft(I, p.id)).sort((x, y) => x.g - y.g || x.last - y.last);
-  const out = rest.filter(p => !hasPairLeft(I, p.id));
-  if (resting.length || out.length) {
-    html += `<section class="card"><h2>Отдыхают</h2>${resting.length ? `<ul class="qlist">${resting.map(p => {
-      const pause = p.g ? Math.round((I.T - p.last) / Math.max(1, C)) : null;
-      return `<li><span class="t">${esc(pName(p.id))} <span class="l">· ${player(p.id).pos}-й номер</span></span><span class="l">сыграно ${p.g}${pause !== null ? ` · пауза ${pause} ${pause === 1 ? 'тур' : 'тура(ов)'}` : ' · ещё не играл(а)'}</span></li>`;
-    }).join('')}</ul>` : '<p class="muted">Все играют.</p>'}
-    ${out.length ? `<h3>Закончили (все пары с их участием выбыли)</h3><p>${out.map(p => esc(pName(p.id))).join(', ')}</p>` : ''}</section>`;
-  }
+  html += restCard(I);
 
   const recent = S.matches.filter(m => m.result).sort((x, y) => (y.result.at || 0) - (x.result.at || 0)).slice(0, 6);
   if (recent.length) html += `<section class="card"><h2>Последние результаты</h2><ul class="qlist">${recent.map(m =>
@@ -426,6 +423,36 @@ function viewNow() {
   return html;
 }
 
+// Все игроки: где сейчас, сколько сыграл, сколько раз отдыхал (сидел, когда начиналась игра) и текущая пауза
+function restStats() {
+  const started = S.matches.filter(m => m.court || m.result).sort(byTime), C = S.settings.courts;
+  const sat = (m, id) => m.idle ? m.idle.includes(id) : (C === 1 && !membersOf(m).includes(id));
+  const R = {};
+  for (const p of S.players) {
+    let n = 0, cur = 0;
+    for (const m of started) { if (sat(m, p.id)) { n++; cur++; } else if (membersOf(m).includes(p.id)) cur = 0; }
+    R[p.id] = { rests: n, pause: cur };
+  }
+  return R;
+}
+function restCard(I) {
+  const R = restStats(), next = S.matches.filter(m => !m.result && !m.court).flatMap(membersOf);
+  const courtOf = id => { const m = S.matches.find(m => m.court && !m.result && membersOf(m).includes(id)); return m ? m.court : 0; };
+  const rows = S.players.map(p => {
+    const c = courtOf(p.id), done = !hasPairLeft(I, p.id) && !c;
+    const st = c ? 0 : next.includes(p.id) ? 1 : done ? 3 : 2;
+    return { p, c, st, g: I.P[p.id].g - (next.includes(p.id) ? 1 : 0), ...R[p.id] };
+  }).sort((x, y) => x.st - y.st || x.c - y.c || y.pause - x.pause || x.g - y.g);
+  const now = r => r.st === 0 ? `<span class="tag on">корт ${r.c}</span>${next.includes(r.p.id) ? '<br><span class="tag nx" style="margin-top:3px">и следующая</span>' : ''}`
+    : r.st === 1 ? '<span class="tag nx">следующая</span>'
+    : r.st === 3 ? '<span class="tag out">закончил(а)</span>'
+    : `<span class="tag rs">ждёт${r.pause ? ' ' + r.pause : ''}</span>`;
+  return `<section class="card"><h2>Игры и отдых</h2><div class="tblwrap"><table class="rest"><thead><tr>
+    <th class="nm">Игрок</th><th>Сейчас</th><th>Сыграно</th><th>Отдыхов</th></tr></thead><tbody>
+    ${rows.map(r => `<tr class="${r.st === 3 ? 'off' : ''}"><td class="nm">${esc(r.p.name)} <span class="l">${r.p.pos}-й</span></td><td>${now(r)}</td><td><b>${r.g}</b></td><td>${r.rests}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="muted">«Сыграно» — завершённые и текущие игры. «Отдыхов» — сколько игр начиналось, пока игрок сидел; «ждёт N» — сколько игр подряд он уже пропустил. «Закончил(а)» — все пары с его участием выбыли.</p></section>`;
+}
 // по каждому игроку — все возможные напарники; с кем проиграл — вычеркнуты
 function partnersCard(I) {
   const pid = (x, y) => { const a = player(x), b = player(y); return a.pos === 4 ? 'pr_' + x + '_' + y : 'pr_' + y + '_' + x; };
@@ -489,7 +516,8 @@ function packState() {
   const ms = S.matches.slice().sort(byTime);
   return [SHARE_V, S.name, S.settings.courts, S.players.map(p => [p.name, p.pos]),
     ms.map((m, i) => [m.num === i + 1 ? 0 : m.num, pi[m.a], pi[m.b], m.court || 0, m.result ? (m.result.winner === 'a' ? 1 : 2) : 0,
-      membersOf(m).reduce((k, x, j) => k | ((m.cons || []).includes(x) ? 1 << j : 0), 0)]),
+      membersOf(m).reduce((k, x, j) => k | ((m.cons || []).includes(x) ? 1 << j : 0), 0),
+      m.idle ? S.players.map(p => m.idle.includes(p.id) ? 1 : 0).join('') : '']),
     S.statFin ? 1 : 0, S.tab];
 }
 function unpackState(d) {
@@ -501,12 +529,13 @@ function unpackState(d) {
   const p2 = st.players.filter(p => p.pos === 2), p4 = st.players.filter(p => p.pos === 4);
   for (const a of p4) for (const b of p2) st.pairs.push({ id: 'pr_' + a.id + '_' + b.id, members: [a.id, b.id] });
   const base = Date.now() - ms.length * 1000;
-  st.matches = ms.map(([num, a, b, court, w, cb], i) => {
+  st.matches = ms.map(([num, a, b, court, w, cb, idle], i) => {
     const time = i + 1; num = num || time;
     if (!st.pairs[a] || !st.pairs[b]) throw new Error('pair');
     return { id: uid(), num, time, a: st.pairs[a].id, b: st.pairs[b].id, court: court || null,
       result: w ? { winner: w === 1 ? 'a' : 'b', sets: [], at: base + time * 1000 } : null,
-      cons: [...st.pairs[a].members, ...st.pairs[b].members].filter((x, j) => (cb || 0) & (1 << j)) };
+      cons: [...st.pairs[a].members, ...st.pairs[b].members].filter((x, j) => (cb || 0) & (1 << j)),
+      ...(idle ? { idle: st.players.filter((p, j) => idle[j] === '1').map(p => p.id) } : {}) };
   });
   st.stage = 'running'; st.tab = ['now', 'games', 'stats'].includes(tab) ? tab : 'now';
   st.statStart = 1; st.statFin = fin ? 1 : 0;   // для счётчика это тот же турнир, а не новый
